@@ -1,0 +1,134 @@
+/*
+ *  This sketch sends data via HTTP GET requests to data.sparkfun.com service.
+ *
+ *  You need to get streamId and privateKey at data.sparkfun.com and paste them
+ *  below. Or just customize this script to talk to other HTTP servers.
+ *
+ */
+
+#include <ESP8266WiFi.h>
+#include <SPI.h>
+#include "MFRC522.h"
+
+#define RST_PIN  5 // RST-PIN für RC522 - RFID - SPI - Modul GPIO5 
+#define SS_PIN  2  // SDA-PIN für RC522 - RFID - SPI - Modul GPIO2 
+
+
+const char* ssid     = "chinmoy123";
+const char* password = "***********";
+
+const char* host = "gschool.org";
+//const char* streamId   = "....................";
+//const char* privateKey = "....................";
+
+MFRC522 mfrc522(SS_PIN, RST_PIN);
+
+void setup() {
+  
+  pinMode(9, OUTPUT);
+  Serial.begin(115200);
+  delay(100);
+  // We start by connecting to a WiFi network
+
+  Serial.println();
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+
+  SPI.begin();           // Init SPI bus
+  mfrc522.PCD_Init();    // Init MFRC522
+  
+  WiFi.begin(ssid, password);
+  
+   int retries = 0;
+   while ((WiFi.status() != WL_CONNECTED) && (retries < 10)) {
+     retries++;
+     delay(500);
+     Serial.print(".");
+
+  }
+
+  Serial.println("");
+  Serial.println("WiFi connected");  
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+  Serial.println(F("Ready!"));
+  Serial.println(F("======================================================")); 
+  Serial.println(F("Scan for Card and print UID:"));
+}
+
+int value = 0;
+
+void loop() 
+
+{ 
+  // Look for new cards
+  if ( ! mfrc522.PICC_IsNewCardPresent()) {
+    delay(50);
+    return;
+  }
+  // Select one of the cards
+  if ( ! mfrc522.PICC_ReadCardSerial()) {
+    delay(50);
+    return;
+  }
+  // Show some details of the PICC (that is: the tag/card)
+  Serial.print(F("Card UID:"));
+  dump_byte_array(mfrc522.uid.uidByte, mfrc522.uid.size);
+  Serial.println();
+
+  String readID = "s";
+  for (byte i = 0; i < mfrc522.uid.size; i++) {
+    readID += mfrc522.uid.uidByte[i];
+  }
+    
+
+  Serial.print("connecting to ");
+  Serial.println(host);
+  
+  // Use WiFiClient class to create TCP connections
+  WiFiClient client;
+  const int httpPort = 80;
+  if (!client.connect(host, httpPort)) {
+    //client.println("GET /search?q=arduino HTTP/1.0");
+    Serial.println("connection failed");
+    digitalWrite(9, HIGH);   // turn the LED on (HIGH is the voltage level)
+    delay(1000);              // wait for a second
+    digitalWrite(9, LOW);    // turn the LED off by making the voltage LOW
+    delay(1000);              // wait for a second
+    
+    return;
+  }
+  
+  // We now create a URI for the request
+  
+  String url = "/proj/getnmid.php?name=chinmoy&id=";
+  url += readID;
+
+  Serial.print("Requesting URL: ");
+  Serial.println(url);
+  
+  // This will send the request to the server
+  client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+               "Host: " + host + "\r\n" + 
+               "Connection: close\r\n\r\n");
+  delay(10);
+  
+  // Read all the lines of the reply from server and print them to Serial
+  while(client.available()){
+    String line = client.readStringUntil('\r');
+    Serial.print(line);
+  }
+  
+  Serial.println();
+  Serial.println("closing connection");
+
+}
+
+// Helper routine to dump a byte array as hex values to Serial
+void dump_byte_array(byte *buffer, byte bufferSize) {
+  for (byte i = 0; i < bufferSize; i++) {
+    Serial.print(buffer[i] < 0x10 ? " 0" : " ");
+    Serial.print(buffer[i], HEX);
+  }
+}
